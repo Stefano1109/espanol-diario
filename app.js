@@ -123,7 +123,7 @@ function loadPack(n) {
 }
 const player = new Audio();
 player.preload = "auto";
-let playToken = 0;
+let playToken = 0, seqToken = 0;
 function play(id, slow) {
   const my = ++playToken;
   return new Promise(res => {
@@ -139,7 +139,7 @@ function play(id, slow) {
     player.onpause = () => { if (my !== playToken) res(); };
   });
 }
-function stopAudio() { playToken++; try { player.pause(); } catch (e) {} }
+function stopAudio() { playToken++; seqToken++; try { player.pause(); } catch (e) {} }
 
 // ---------- scoring engine ----------
 const engine = { p: null, state: "idle", pct: 0, err: "", eng: null };
@@ -492,8 +492,13 @@ VIEWS.listen = () => {
   return "";
 };
 async function playDialogue(n) {
-  const dl = dayOf(n).dialogue; const my = playToken + 1;
-  for (const l of dl.lines) { await play(l.au); if (playToken !== my) return; await new Promise(r => setTimeout(r, 250)); }
+  const dl = dayOf(n).dialogue; const my = ++seqToken;
+  for (const l of dl.lines) {
+    if (seqToken !== my) return;
+    await play(l.au);
+    if (seqToken !== my) return;
+    await new Promise(r => setTimeout(r, 300));
+  }
 }
 function listenAdvance() {
   S.ans = null; S.i++;
