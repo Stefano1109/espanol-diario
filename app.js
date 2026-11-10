@@ -96,6 +96,10 @@ const isZh = () => state.settings.lang === "zh";
 
 // ---------- course ----------
 let COURSE = [];
+const TOTAL = () => COURSE.length;
+const stageOf = n => Math.ceil(n / 30);
+const STAGES = () => Math.ceil(TOTAL() / 30);
+const stageRange = st => [30 * (st - 1) + 1, Math.min(TOTAL(), 30 * st)];
 const dayOf = n => COURSE[n - 1];
 const wordId = (n, i) => n + "-" + i;
 function wordById(id) { const [n, i] = id.split("-").map(Number); return { day: n, i, w: dayOf(n).words[i] }; }
@@ -232,7 +236,7 @@ function ivlText(days) {
 
 // ---------- day logic ----------
 function dayRec(n) { return state.days[n] || (state.days[n] = {}); }
-function currentDay() { for (let n = 1; n <= 30; n++) if (!(state.days[n] && state.days[n].done)) return n; return 31; }
+function currentDay() { for (let n = 1; n <= TOTAL(); n++) if (!(state.days[n] && state.days[n].done)) return n; return TOTAL() + 1; }
 function doneToday() { return Object.values(state.days).some(d => d.done && d.date === today() && !d.skipped); }
 function streak() {
   const dates = new Set(Object.values(state.days).filter(d => d.done && !d.skipped && d.date).map(d => d.date));
@@ -243,7 +247,7 @@ function streak() {
 }
 function backlog(n) {
   const out = [];
-  for (let k = 1; k <= Math.min(n, 30); k++) dayOf(k).words.forEach((w, i) => { const id = wordId(k, i); if (!state.cards[id]) out.push(id); });
+  for (let k = Math.max(1, n - 2); k <= Math.min(n, TOTAL()); k++) dayOf(k).words.forEach((w, i) => { const id = wordId(k, i); if (!state.cards[id]) out.push(id); });
   return out;
 }
 function dueIds() {
@@ -288,8 +292,8 @@ const VIEWS = {};
 // ===== HOME =====
 VIEWS.home = () => {
   const n = currentDay();
-  if (n > 30) return `<div class="stack"><div class="title-xl">${L("30 天完成！", "30 days complete!")}</div>
-    <p class="muted">${L("你已经完成全部 30 天。可以在设置里跳回任意一天复习，下一阶段内容正在准备。", "You've finished all 30 days. Jump back to any day in Settings to review; the next stage is on its way.")}</p></div>`;
+  if (n > TOTAL()) return `<div class="stack"><div class="title-xl">${L(`${TOTAL()} 天完成！`, `${TOTAL()} days complete!`)}</div>
+    <p class="muted">${L(`你已经完成全部 ${TOTAL()} 天。可以在设置里跳回任意一天复习。`, `You've finished all ${TOTAL()} days. Jump back to any day in Settings to review.`)}</p></div>`;
   const d = dayOf(n), rec = state.days[n] || {};
   const plan = vocabPlan(n);
   const vocabCount = plan.reviews.length + plan.fresh.length;
@@ -297,7 +301,7 @@ VIEWS.home = () => {
   const sk = streak();
   const dt = doneToday();
   const reco = recommended(d);
-  const phase = n <= 15 ? L("阶段一 · 现在时巩固", "Stage 1 · Present tense") : L("阶段二 · 喜好与计划", "Stage 2 · Likes & plans");
+  const phase = L(`第 ${stageOf(n)} 阶段 · ${d.lv}`, `Stage ${stageOf(n)} · ${d.lv}`);
   let week = "";
   for (let k = Math.max(1, n - 6); k <= n; k++) {
     const r = state.days[k]; const t = dayOf(k).type;
@@ -325,11 +329,11 @@ VIEWS.home = () => {
   return `<div class="stack" style="gap:18px">
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div><div class="muted" style="font-size:15px;font-weight:600">¡Hola! ${L("今天也来 15 分钟", "15 minutes today")}</div>
-      <div class="title-xl">${L(`第 ${n} 天`, `Day ${n}`)} <span class="muted" style="font-size:18px;font-weight:600">/ 30</span></div></div>
+      <div class="title-xl">${L(`第 ${n} 天`, `Day ${n}`)} <span class="muted" style="font-size:18px;font-weight:600">/ ${TOTAL()}</span></div></div>
       <div class="pill" style="background:var(--surface);color:var(--clay);font-size:14px;padding:8px 12px;box-shadow:var(--shadow)">${I.flame}${L(`连续 ${sk} 天`, `${sk}-day streak`)}</div>
     </div>
-    <div class="stack" style="gap:8px"><div class="row small muted" style="justify-content:space-between;font-weight:600"><span>${phase}</span><span class="tabular">${n - 1} / 30</span></div>
-      <div class="bar" style="height:8px"><i style="width:${Math.round((n - 1) * 100 / 30)}%"></i></div></div>
+    <div class="stack" style="gap:8px"><div class="row small muted" style="justify-content:space-between;font-weight:600"><span>${phase}</span><span class="tabular">${L("本阶段", "This stage")} ${n - stageRange(stageOf(n))[0]} / ${stageRange(stageOf(n))[1] - stageRange(stageOf(n))[0] + 1}</span></div>
+      <div class="bar" style="height:8px"><i style="width:${Math.round((n - stageRange(stageOf(n))[0]) * 100 / (stageRange(stageOf(n))[1] - stageRange(stageOf(n))[0] + 1))}%"></i></div></div>
     ${dt ? `<div class="notice">${L("今天的训练已经完成，明天再来。想多练可以继续下面这一天。", "Today's session is done. Come back tomorrow, or carry on with the next day if you want more practice.")}</div>` : ""}
     <div style="background:var(--night);color:var(--on-night);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:6px">
       <div class="small" style="color:var(--night-muted);font-weight:600">${L("今日主题", "Today's theme")}</div>
@@ -424,9 +428,9 @@ function listenSteps(n) {
   }
   return steps;
 }
-function sentencePool(maxDay) {
+function sentencePool(from, to) {
   const pool = [];
-  for (let k = 1; k <= maxDay; k++) { const d = dayOf(k); if (d.type === "listen") d.sentences.forEach(s => pool.push({ s, k })); }
+  for (let k = Math.max(1, from); k <= to; k++) { const d = dayOf(k); if (d.type === "listen") d.sentences.forEach(s => pool.push({ s, k })); }
   return pool;
 }
 function startListen(n, steps, kind) {
@@ -726,9 +730,20 @@ function finishSpeak() {
   go("report", { n, rep });
 }
 
-// ===== REVIEW (day 15) & TEST (day 30) =====
+// ===== REVIEW & TEST DAYS =====
+function shadowPool(from, to) {
+  const all = [];
+  for (let k = Math.max(2, from); k <= to; k++) { const d = dayOf(k); if (d.type === "speak") d.shadow.forEach(h => all.push({ t: "shadow", es: h.es, tr: isZh() ? h.zh : h.en, au: h.au, dur: h.dur, ref: h.ref, pack: k })); }
+  return all;
+}
+const REVIEW_TALK = {
+  A: { prompt: "用 4–5 句话谈谈最近两周学过的一个话题", promptEn: "Talk for 4–5 sentences about one topic from the last two weeks", frame: "Quiero hablar de… Normalmente… Me gusta… También…", checklist: ["说清楚话题", "用了最近学的词", "至少说了 4 句"], checklistEn: ["Named the topic", "Used recent words", "At least 4 sentences"] },
+  B: { prompt: "选最近两周的一个话题，讲一段经历并给出你的看法", promptEn: "Pick a topic from the last two weeks, tell a short experience and give your opinion", frame: "Hace poco… Lo que pasó fue que… En mi opinión… Por eso…", checklist: ["用了过去时讲经历", "表达了观点", "用了连接词"], checklistEn: ["Told it in the past tense", "Gave an opinion", "Used linking words"] },
+  C: { prompt: "用 1 分钟就最近两周的一个话题做个小演讲：立场、理由、例子", promptEn: "Give a 1-minute talk on a recent topic: your position, reasons and an example", frame: "En primer lugar… Además… Por ejemplo… En definitiva…", checklist: ["立场清楚", "两个理由", "一个具体例子"], checklistEn: ["Clear position", "Two reasons", "One concrete example"] },
+};
+const bandOf = lv => (lv || "A1")[0];
 function startReview(n) {
-  const pool = sentencePool(14);
+  const pool = sentencePool(n - 14, n - 1);
   const steps = pick(pool, 10).map(({ s, k }) => mcqFrom(s.au, s.es, isZh() ? s.opts : s.optsEn, { pack: k }));
   startListen(n, steps, "review-listen");
 }
@@ -737,15 +752,17 @@ function startReviewSpeak(n, prevS) {
   let items = low.map(x => ({ t: "shadow", es: x.es, tr: x.tr || "", au: x.au, dur: x.dur, ref: x.ref, pack: x.day }));
   if (items.length < 5) {
     const extra = [];
-    for (let k = 2; k <= 14; k++) { const d = dayOf(k); if (d.type === "speak") d.shadow.forEach(h => extra.push({ t: "shadow", es: h.es, tr: isZh() ? h.zh : h.en, au: h.au, dur: h.dur, ref: h.ref, pack: k })); }
+    extra.push(...shadowPool(n - 14, n - 1));
     items = items.concat(pick(extra.filter(x => !items.some(y => y.es === x.es)), 5 - items.length));
   }
-  const steps = items.concat([{ t: "free", f: { prompt: "用 4–5 句话介绍你自己：名字、家人、作息和爱好", promptEn: "Introduce yourself in 4–5 sentences: name, family, routine, hobbies", frame: "Me llamo… Soy de… Tengo… Normalmente me levanto a las… Me gusta…", checklist: ["说了名字和来自哪里", "说了一个家人", "说了一个时间"], checklistEn: ["Name and where you're from", "One family member", "A time of day"] } }]);
+  const talk = n === 15 ? { prompt: "用 4–5 句话介绍你自己：名字、家人、作息和爱好", promptEn: "Introduce yourself in 4–5 sentences: name, family, routine, hobbies", frame: "Me llamo… Soy de… Tengo… Normalmente me levanto a las… Me gusta…", checklist: ["说了名字和来自哪里", "说了一个家人", "说了一个时间"], checklistEn: ["Name and where you're from", "One family member", "A time of day"] } : REVIEW_TALK[bandOf(dayOf(n).lv)];
+  const steps = items.concat([{ t: "free", f: talk }]);
   startSpeak(n, steps, "review-speak", { listen: prevS.listenResult });
 }
 function startTest(n) {
   const ids = Object.keys(state.cards);
-  const pool = ids.length >= 6 ? ids : backlog(29);
+  const recent = ids.filter(id => wordById(id).day >= n - 60);
+  const pool = recent.length >= 10 ? recent : ids;
   const chosen = pick(pool, Math.min(30, pool.length));
   const steps = chosen.map(id => {
     const { w, day } = wordById(id);
@@ -756,13 +773,12 @@ function startTest(n) {
   startListen(n, steps, "test-vocab");
 }
 function startTestListen(n, prev) {
-  const steps = pick(sentencePool(29), 20).map(({ s, k }) => mcqFrom(s.au, s.es, isZh() ? s.opts : s.optsEn, { pack: k }));
+  const steps = pick(sentencePool(n === TOTAL() ? 1 : n - 29, n - 1), 20).map(({ s, k }) => mcqFrom(s.au, s.es, isZh() ? s.opts : s.optsEn, { pack: k }));
   startListen(n, steps, "test-listen"); S.prev = prev;
 }
 function startTestSpeak(n, prev) {
-  const all = [];
-  for (let k = 2; k <= 29; k++) { const d = dayOf(k); if (d.type === "speak") d.shadow.forEach(h => all.push({ t: "shadow", es: h.es, tr: isZh() ? h.zh : h.en, au: h.au, dur: h.dur, ref: h.ref, pack: k })); }
-  const steps = pick(all, 10).concat([{ t: "free", f: { prompt: "用 1 分钟介绍你自己，和第 15 天的录音对比", promptEn: "Talk about yourself for 1 minute, then compare with your Day 15 recording", frame: "Me llamo… Vivo en… Trabajo… Me gusta… Este fin de semana voy a…", checklist: ["用了 ser 和 estar", "说了喜好", "说了一个计划"], checklistEn: ["Used ser and estar", "Talked about likes", "Talked about a plan"] } }]);
+  const all = shadowPool(n === TOTAL() ? 1 : n - 29, n - 1);
+  const steps = pick(all, 10).concat([{ t: "free", f: { prompt: "用 1 分钟介绍你自己，再和复习日的录音对比，听听进步", promptEn: "Talk about yourself for 1 minute, then compare it with your review-day recording", frame: "Me llamo… Vivo en… Trabajo… Me gusta… Este fin de semana voy a…", checklist: ["用了 ser 和 estar", "说了喜好", "说了一个计划"], checklistEn: ["Used ser and estar", "Talked about likes", "Talked about a plan"] } }]);
   startSpeak(n, steps, "test-speak", prev);
 }
 
@@ -792,7 +808,7 @@ VIEWS.done = () => {
   if (vs.reviews !== undefined) { tiles.push([L("复习词汇", "Words reviewed"), vs.reviews]); tiles.push([L("复习正确率", "Review accuracy"), vs.reviews ? Math.round(vs.good * 100 / vs.reviews) + "%" : "—"]); tiles.push([L("新学词汇", "New words"), vs.fresh]); }
   if (st.listen) tiles.push([L("听力正确", "Listening"), `${st.listen.correct}/${st.listen.total}`]);
   if (st.speak && st.speak.count) tiles.push([L("口语平均分", "Speaking avg"), st.speak.avg]);
-  const nd = n < 30 ? dayOf(n + 1) : null;
+  const nd = n < TOTAL() ? dayOf(n + 1) : null;
   const missing = !r.done ? (!r.vocab ? L("还差：词汇", "Still to do: vocabulary") : L("还差：听力或口语", "Still to do: listening or speaking")) : "";
   return `<div class="stack" style="gap:20px;padding-top:20px">
     <div class="stack" style="align-items:center;gap:10px"><div style="width:96px;height:96px;border-radius:999px;background:${r.done ? "var(--teal)" : "var(--soft)"};color:${r.done ? "var(--on-teal)" : "var(--muted)"};display:flex;align-items:center;justify-content:center">${I.check(48)}</div>
@@ -824,9 +840,24 @@ VIEWS.map = () => {
     return `<div class="row" style="min-height:50px;${isCur ? "background:var(--clay-soft);border-radius:12px;margin:0 -8px;padding:0 8px" : ""}"><span class="tabular" style="width:44px;font-size:12px;font-weight:700;color:${isCur ? "var(--clay)" : "var(--muted)"}">${k2 ? k1 + "–" + k2 : k1}</span>
       <div style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:15px;font-weight:700">${esc(tTheme(d))}</span><span class="tiny muted">${esc(tGram(d))}</span></div>${status}</div>`;
   };
-  const phase = (a, b, title) => { let h = ""; for (let k = a; k <= b; k++) { const d = dayOf(k); if (d.type === "listen" && k < b) { h += row(k, k + 1); k++; } else h += row(k); } return `<div class="card stack" style="gap:2px"><div class="row" style="justify-content:space-between;padding-bottom:6px"><span style="font-size:15px;font-weight:800">${title}</span><span class="tiny muted" style="font-weight:600">${L(`第 ${a}–${b} 天`, `Days ${a}–${b}`)}</span></div>${h}</div>`; };
-  return `<div class="stack"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="title-l" style="font-size:26px">${L("课程地图", "Course map")}</div><div class="small muted" style="font-weight:600">${L("30 天 · 14 个主题 · 140 个新词", "30 days · 14 themes · 140 new words")}</div></div><div class="small ok" style="font-weight:700">${L(`已学 ${learned} 词`, `${learned} words learned`)}</div></div>
-    ${phase(1, 15, L("阶段一 · 现在时巩固", "Stage 1 · Present tense"))}${phase(16, 30, L("阶段二 · 喜好与计划", "Stage 2 · Likes & plans"))}</div>`;
+  const curStage = stageOf(Math.min(cur, TOTAL()));
+  const open = view.stage || curStage;
+  const stageCard = st => {
+    const [a, b] = stageRange(st); const lv = dayOf(a).lv;
+    let doneN = 0; for (let k = a; k <= b; k++) if (state.days[k] && state.days[k].done) doneN++;
+    const isOpen = st === open;
+    let h = "";
+    if (isOpen) for (let k = a; k <= b; k++) { const d = dayOf(k); if (d.type === "listen" && k < b) { h += row(k, k + 1); k++; } else h += row(k); }
+    const allDone = doneN === b - a + 1;
+    return `<div class="card stack" style="gap:2px;${st === curStage ? "border:2px solid var(--clay)" : ""}">
+      <button type="button" class="row" data-act="stage" data-v="${st}" aria-expanded="${isOpen}" style="justify-content:space-between;background:none;border:none;padding:0 0 ${isOpen ? 6 : 0}px;color:var(--ink);text-align:left;min-height:44px">
+        <span style="display:flex;flex-direction:column"><span style="font-size:15px;font-weight:800">${L(`第 ${st} 阶段`, `Stage ${st}`)} · ${esc(lv)}</span><span class="tiny muted" style="font-weight:600">${L(`第 ${a}–${b} 天`, `Days ${a}–${b}`)} · ${esc(tTheme(dayOf(a)))}…</span></span>
+        <span class="tiny tabular" style="font-weight:700;color:${allDone ? "var(--teal)" : "var(--muted)"}">${allDone ? I.checkC : doneN + " / " + (b - a + 1)}</span></button>${h}</div>`;
+  };
+  let cards = ""; for (let st = 1; st <= STAGES(); st++) cards += stageCard(st);
+  const nWords = COURSE.reduce((x, d) => x + d.words.length, 0), nThemes = COURSE.filter(d => d.type === "listen").length;
+  return `<div class="stack"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="title-l" style="font-size:26px">${L("课程地图", "Course map")}</div><div class="small muted" style="font-weight:600">${L(`${TOTAL()} 天 · ${nThemes} 个主题 · ${nWords} 个新词`, `${TOTAL()} days · ${nThemes} themes · ${nWords} new words`)}</div></div><div class="small ok" style="font-weight:700">${L(`已学 ${learned} 词`, `${learned} words learned`)}</div></div>
+    ${cards}</div>`;
 };
 
 // ===== WORDS =====
@@ -865,7 +896,7 @@ VIEWS.settings = () => {
   return `<div class="stack" style="gap:12px"><div class="title-l" style="font-size:26px">${L("设置", "Settings")}</div>
     ${sec(L("讲解语言", "Explanations in"), `<div class="list-row" style="justify-content:space-between"><span style="font-size:15px;font-weight:600">${L("中文 / English", "English / 中文")}</span><div class="seg"><button type="button" data-act="lang" data-v="en" class="${s.lang === "en" ? "on" : ""}">English</button><button type="button" data-act="lang" data-v="zh" class="${s.lang === "zh" ? "on" : ""}">中文</button></div></div>`)}
     ${sec(L("学习安排", "Study plan"), stepper("newPerDay", s.newPerDay, L("每日新词", "New words a day")) + stepper("reviewCap", s.reviewCap, L("每日复习上限", "Daily review limit")) +
-      `<div class="list-row" style="justify-content:space-between"><span style="font-size:15px;font-weight:600">${L("跳到第几天", "Jump to day")}</span><div class="row" style="gap:4px"><button type="button" class="step" data-act="jump-step" data-v="-1" aria-label="${L("减少", "Decrease")}">−</button><span class="tabular" style="width:36px;text-align:center;font-weight:800">${view.jump || cur}</span><button type="button" class="step" data-act="jump-step" data-v="1" aria-label="${L("增加", "Increase")}">+</button><button type="button" class="btn btn-ghost" style="min-height:36px;font-size:13px;padding:0 10px" data-act="jump">${L("跳转", "Go")}</button></div></div>`)}
+      `<div class="list-row" style="justify-content:space-between"><span style="font-size:15px;font-weight:600">${L("跳到第几天", "Jump to day")}</span><div class="row" style="gap:6px"><input id="jump-input" type="number" inputmode="numeric" min="1" max="${TOTAL()}" value="${view.jump || Math.min(cur, TOTAL())}" aria-label="${L("天数", "Day number")}" style="width:72px;height:36px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-weight:800;text-align:center"><button type="button" class="btn btn-ghost" style="min-height:36px;font-size:13px;padding:0 10px" data-act="jump">${L("跳转", "Go")}</button></div></div>`)}
     ${sec(L("声音", "Audio"), `<div class="list-row" style="justify-content:space-between"><span style="font-size:15px;font-weight:600">${L("默认语速", "Default speed")}</span><div class="seg"><button type="button" data-act="speed" data-v="0" class="${!s.slowDefault ? "on" : ""}">${L("正常", "Normal")}</button><button type="button" data-act="speed" data-v="1" class="${s.slowDefault ? "on" : ""}">${L("稍慢", "Slower")}</button></div></div>
       <div class="list-row small muted">${L("发音：拉美（墨西哥）口音，开源语音合成", "Voice: Latin American (Mexico) accent, open-source speech synthesis")}</div>`)}
     ${sec(L("口语评分", "Speaking scores"), stepper("pass", s.pass, L("及格线", "Pass mark")) +
@@ -876,7 +907,7 @@ VIEWS.settings = () => {
       ${view.confirmReset ? `<div class="list-row" style="justify-content:space-between;gap:8px"><span class="small" style="color:var(--clay);font-weight:700">${L("确定清空全部进度？", "Erase all progress?")}</span><div class="row" style="gap:6px"><button type="button" class="btn btn-ghost" style="min-height:36px;font-size:13px;padding:0 10px" data-act="reset-cancel">${L("取消", "Cancel")}</button><button type="button" class="btn btn-clay" style="min-height:36px;font-size:13px;padding:0 10px" data-act="reset-do">${L("清空", "Erase")}</button></div></div>`
         : `<button type="button" class="list-row" style="width:100%;background:none;border:none;color:var(--clay);font-size:15px;font-weight:700" data-act="reset">${L("重置全部进度", "Reset all progress")}</button>`}`)}
     ${view.msg ? `<div class="notice">${esc(view.msg)}</div>` : ""}
-    <div class="tiny muted" style="text-align:center">${L("版本 V1 · 内容：第 1–30 天 · 进度自动保存", "Version V1 · Content: days 1–30 · Progress saves automatically")}</div></div>`;
+    <div class="tiny muted" style="text-align:center">${L(`版本 V2 · 内容：第 1–${TOTAL()} 天 · 进度自动保存`, `Version V2 · Content: days 1–${TOTAL()} · Progress saves automatically`)}</div></div>`;
 };
 async function exportBackup() {
   const data = JSON.stringify(state);
@@ -961,13 +992,16 @@ function onClick(e) {
       const lim = { newPerDay: [1, 10, 1], reviewCap: [10, 60, 5], pass: [50, 90, 5] }[k];
       state.settings[k] = Math.min(lim[1], Math.max(lim[0], state.settings[k] + d * lim[2])); save(); render(); return;
     }
-    case "jump-step": view.jump = Math.min(30, Math.max(1, (view.jump || currentDay()) + Number(v))); render(); return;
+    case "stage": view.stage = (view.stage || stageOf(Math.min(currentDay(), TOTAL()))) === Number(v) ? -1 : Number(v); render(); return;
     case "jump": {
-      const target = view.jump || currentDay(); const t = today();
-      for (let k = 1; k <= 30; k++) {
+      const inp = document.getElementById("jump-input");
+      const target = Math.min(TOTAL(), Math.max(1, Math.round(Number(inp && inp.value) || currentDay()))); view.jump = target; const t = today();
+      let spread = 0;
+      for (let k = 1; k <= TOTAL(); k++) {
         if (k < target) {
           if (!(state.days[k] && state.days[k].done)) state.days[k] = { done: true, skipped: true, date: t };
-          dayOf(k).words.forEach((w, i) => { const id = wordId(k, i); if (!state.cards[id]) { const c = schedule(null, 3, t); c.due = t; state.cards[id] = c; state.introduced.push(id); } });
+          // only the last 30 days' words join reviews, spread over two weeks
+          if (k >= target - 30) dayOf(k).words.forEach((w, i) => { const id = wordId(k, i); if (!state.cards[id]) { const c = schedule(null, 3, t); c.due = addDays(t, spread++ % 14); state.cards[id] = c; state.introduced.push(id); } });
         } else if (state.days[k]) delete state.days[k];
       }
       save(); view.msg = L(`已跳到第 ${target} 天。之前的词会作为复习出现。`, `Moved to day ${target}. Earlier words will come up as reviews.`); render(); return;
